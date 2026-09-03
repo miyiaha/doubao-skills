@@ -5,9 +5,7 @@
 #
 # 运行器自动检测：优先用 node（更普及），没有则回退 deno。
 set -euo pipefail
-
 cd "$(dirname "$0")/.."
-
 RUNNER=""
 if command -v node >/dev/null 2>&1; then
   RUNNER="node"
@@ -19,7 +17,6 @@ else
   echo "❌ 未找到 node 或 deno，请先安装其一：https://nodejs.org 或 https://deno.land" >&2
   exit 1
 fi
-
 # 临时目录（v1.7.2 健壮性修复）：优先系统 mktemp；/tmp 不可写（沙箱/受限环境）时
 # 回退到技能目录内 .roadshow-tmp，避免 EACCES 导致回归假失败。
 make_tmp_dir() {
@@ -31,23 +28,19 @@ make_tmp_dir() {
     mktemp -d "$(dirname "$0")/../.roadshow-tmp/roadshow.XXXXXX"
   fi
 }
-
 echo "══════════════════════════════════════════════════════"
 echo "  运行器：${RUNNER}    （node 优先，无则回退 deno）"
 echo "══════════════════════════════════════════════════════"
-
 echo ""
 echo "══════════════════════════════════════════════════════"
 echo "  1) CLI 体检（内置范例 pitch-example）"
 echo "══════════════════════════════════════════════════════"
 "${RUN_CMD[@]}" scripts/roadshow_check.mjs
-
 echo ""
 echo "══════════════════════════════════════════════════════"
 echo "  2) 输出合规测试 harness（多用例正/负/边界）"
 echo "══════════════════════════════════════════════════════"
 "${RUN_CMD[@]}" scripts/roadshow_test_harness.mjs
-
 echo ""
 echo "══════════════════════════════════════════════════════"
 echo "  3) PPT 渲染大纲导出回归（内置范例 → 临时目录）"
@@ -55,11 +48,19 @@ echo "════════════════════════�
 OUT_DIR="$(make_tmp_dir)"
 "${RUN_CMD[@]}" scripts/roadshow_export_pptx.mjs references/saas-pitch-example.md "$OUT_DIR" >/dev/null
 rm -rf "$OUT_DIR"
-
 echo ""
 echo "══════════════════════════════════════════════════════"
 echo "  4) .pptx 技能内直出回归（v1.5，内置范例 → 临时目录）"
 echo "══════════════════════════════════════════════════════"
+# vendor 引擎检查：pptxgen.standalone.cjs 为第三方打包文件（~708KB），
+# 仓库不直接提交，需先运行 bash scripts/install_vendor.sh 一键生成。
+VENDOR_FILE="scripts/vendor/pptxgen.standalone.cjs"
+if [ ! -f "${VENDOR_FILE}" ]; then
+  echo "⚠️  未找到 ${VENDOR_FILE}（第三方渲染引擎，仓库不直接提交）"
+  echo "   跳过 .pptx 直出回归。如需启用，请先运行："
+  echo "     bash scripts/install_vendor.sh"
+  echo "   （其他 3 项回归不受影响）"
+else
 OUT_DIR="$(make_tmp_dir)"
 "${RUN_CMD[@]}" scripts/roadshow_build_pptx.mjs references/saas-pitch-example.md "$OUT_DIR" >/dev/null
 # 校验确实产出了合法 pptx（zip 结构 + 含 slide 与 chart）
@@ -76,6 +77,6 @@ else
   test -f "$OUT_DIR/saas-pitch-example.pptx" && echo "  ✅ .pptx 文件已产出（无 python3 深度校验）"
 fi
 rm -rf "$OUT_DIR"
-
+fi
 echo ""
-echo "✅ 一键合规回归全部通过（含 PPT 大纲导出 + .pptx 技能内直出）。"
+echo "✅ 一键合规回归全部通过（含 PPT 大纲导出；.pptx 直出视 vendor 安装情况）。"
